@@ -3,6 +3,9 @@ import pandas as pd
 import time
 import os
 import csv
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+import datetime
 
 def conexao_bando_de_dados():
     conexao = psycopg2.connect(
@@ -23,7 +26,8 @@ def listar_tabelas(conexao):
     return nome_tabelas
 
 
-def salvamento_local_tabelas_postgre(conexao):
+def salvamento_local_tabelas_postgre():
+    conexao = conexao_bando_de_dados()
     tabelas = listar_tabelas(conexao)
     cursor = conexao.cursor()
     data = data_hoje()
@@ -49,7 +53,8 @@ def data_hoje():
     data = f"{ano}-{mes}-{dia}"
     return data
 
-def salvamento_local_csv(caminho_csv):
+def salvamento_local_csv():
+    caminho_csv = "dados/order_details.csv"
     df = leitura_csv(caminho_csv).to_csv(lineterminator="\n", index=False)
     data = data_hoje() 
     caminho_saida = f"data/csv/{data}"
@@ -58,12 +63,10 @@ def salvamento_local_csv(caminho_csv):
         arquivo.write(df)
         
     
-def  main():
-    caminho_csv = "dados/order_details.csv"
-    salvamento_local_csv(caminho_csv)
-    conexao = conexao_bando_de_dados()
-    salvamento_local_tabelas_postgre(conexao=conexao)
-    conexao.close()
+def main():
+    with DAG("carregamento_local", start_date=datetime(2024, 6, 10), schedule_interval="* * * * *", catchup=False) as dag:
+        salvar_csv_task = PythonOperator(task_id="salvamento_local_csv",python_callable=salvamento_local_csv,)   
+        
 
 if __name__ == "__main__":
     main()
